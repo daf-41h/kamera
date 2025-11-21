@@ -43,21 +43,14 @@ let canvas = document.getElementById("canvas");
 let preview = document.getElementById("preview");
 let downloadLink = document.getElementById("downloadLink");
 let mapCanvas = document.getElementById("mapCanvas");
-let mapCtx = mapCanvas.getContext("2d");
 let latitude, longitude;
 
 async function startCamera(){
- try{
-  let stream = await navigator.mediaDevices.getUserMedia({
-   video:{ facingMode: useFront?"user":"environment" },
-   audio:false
-  });
-  video.srcObject = stream;
- }catch(e){ alert("Kamera gagal dibuka: "+e); }
+ let stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode: useFront?"user":"environment" }});
+ video.srcObject = stream;
 }
-
-function switchCamera(){ useFront = !useFront; startCamera(); }
 startCamera();
+function switchCamera(){ useFront=!useFront; startCamera(); }
 
 navigator.geolocation.getCurrentPosition(pos=>{
  latitude = pos.coords.latitude;
@@ -66,12 +59,10 @@ navigator.geolocation.getCurrentPosition(pos=>{
 });
 
 function loadMap(lat, lng){
- let map = L.map(mapCanvas, {
-  center:[lat,lng], zoom:17, zoomControl:false, attributionControl:false
- });
+ let map = L.map(mapCanvas,{center:[lat,lng],zoom:17,zoomControl:false,attributionControl:false});
  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
  L.marker([lat,lng]).addTo(map);
- setTimeout(()=>{ map.invalidateSize(); },500);
+ setTimeout(()=>{ map.invalidateSize(); },400);
 }
 
 function takePhoto(){
@@ -80,29 +71,30 @@ function takePhoto(){
  canvas.width = w;
  canvas.height = h;
  let ctx = canvas.getContext("2d");
- ctx.drawImage(video, 0, 0, w, h);
- ctx.drawImage(mapCanvas, 20, 20, 250, 250);
+
+ ctx.drawImage(video,0,0,w,h);
+ ctx.drawImage(mapCanvas,20,20,220,220);
+
  let cat = document.getElementById("category").value;
- ctx.fillStyle = "rgba(0,0,0,0.6)";
- ctx.fillRect(w-400, 30, 360, 60);
+ ctx.fillStyle = "rgba(0,0,0,0.55)";
+ ctx.fillRect(w-300,30,260,55);
  ctx.fillStyle = "#fff";
- ctx.font = "40px Arial";
- ctx.fillText(cat, w-380, 75);
+ ctx.font = "32px Arial";
+ ctx.fillText(cat, w-280,70);
 
  let now = new Date();
- let waktu = now.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
- ctx.font = "80px Arial";
- ctx.fillText(waktu, 40, h-250);
+ let jam = now.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+ ctx.font = "70px Arial";
+ ctx.fillText(jam, 40, h-260);
 
  ctx.font = "32px Arial";
- let tgl = now.toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric',weekday:'long'});
- ctx.fillText(tgl, 40, h-200);
+ ctx.fillText(now.toLocaleDateString('id-ID',{weekday:'long',day:'2-digit',month:'2-digit',year:'numeric'}),40,h-210);
 
  ctx.font = "26px Arial";
- ctx.fillText(`Koordinat: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`, 40, h-140);
- ctx.fillText(`Cuaca: 26°C`, 40, h-100);
+ ctx.fillText(`Koordinat: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,40,h-155);
+ ctx.fillText(`Cuaca: 26°C`,40,h-120);
 
- let dataURL = canvas.toDataURL("image/jpeg", 0.95);
+ let dataURL = canvas.toDataURL("image/jpeg",0.95);
  preview.src = dataURL;
  downloadLink.href = dataURL;
  downloadLink.style.display = "block";
