@@ -1,268 +1,112 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Stok Opname - Timemark Style (Web)</title>
-  <style>
-    :root{--accent:#ffb703}
-    body{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial; background:#111827; color:#fff; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0}
-    .app{width:420px; max-width:95vw; background:#0b1220; border-radius:12px; padding:14px; box-shadow:0 8px 30px rgba(2,6,23,.6)}
-    video, canvas{width:100%; height:auto; border-radius:10px; background:#000}
-    .controls{display:grid; grid-template-columns:1fr auto; gap:8px; margin-top:10px}
-    select,input,button{padding:10px; border-radius:8px; border:0; font-size:14px}
-    select,input{background:#0f1724; color:#fff}
-    button{background:var(--accent); color:#000; font-weight:600; cursor:pointer}
-    .small{font-size:12px; opacity:.9}
-    #previewArea{margin-top:12px}
-    .metaOverlay{position:absolute; left:0; top:0; pointer-events:none}
-    .row{display:flex; gap:8px}
-    .mapThumb{position:absolute; left:12px; top:12px; width:86px; height:86px; border-radius:10px; overflow:hidden; border:3px solid rgba(255,255,255,.18)}
-    .bigTime{position:absolute; left:18px; bottom:110px; font-size:64px; font-weight:700; letter-spacing:2px}
-    .dateBlock{position:absolute; left:18px; bottom:66px; display:flex; gap:10px; align-items:center}
-    .address{position:absolute; left:18px; bottom:22px; right:18px; font-size:14px; line-height:1.25}
-    .categoryTag{position:absolute; right:18px; bottom:110px; background:rgba(0,0,0,.45); padding:8px 12px; border-radius:8px; font-weight:600}
-    .controlsRow{display:flex; gap:8px; margin-top:10px}
-    a.link{color:var(--accent)}
-    .footer{font-size:12px; color:#9ca3af; margin-top:8px}
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Kamera Stok Opname</title>
+<style>
+ body { margin:0; font-family:Arial, sans-serif; background:#000; color:#fff; }
+ video { width:100%; height:auto; }
+ #controls { padding:10px; background:#111; }
+ select, button { padding:10px; margin:5px 0; width:100%; border:none; border-radius:5px; }
+ #preview { margin-top:10px; width:100%; }
+ canvas { display:none; }
+</style>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
-  <div class="app">
-    <h3 style="margin:0 0 8px 0">Stok Opname — Timemark Style (Web)</h3>
 
-    <div style="position:relative">
-      <video id="video" autoplay playsinline></video>
-      <canvas id="canvas" style="display:none"></canvas>
+<video id="video" autoplay playsinline></video>
 
-      <!-- Overlay preview elements (drawn on canvas as well) -->
-      <div class="mapThumb" id="mapThumb" style="display:none"></div>
-      <div class="bigTime" id="bigTime" style="display:none"></div>
-      <div class="dateBlock" id="dateBlock" style="display:none"></div>
-      <div class="categoryTag" id="categoryTag" style="display:none"></div>
-      <div class="address" id="address" style="display:none"></div>
-    </div>
+<div id="controls">
+ <select id="category">
+  <option>Barang Sampai</option>
+  <option>Bahan Sebelum Dicuci</option>
+  <option>Sudah Dicuci</option>
+  <option>Rusak / Busuk</option>
+ </select>
+ <button onclick="switchCamera()">Ganti Kamera</button>
+ <button onclick="takePhoto()">Ambil Foto</button>
+ <a id="downloadLink" download="hasil.jpg" style="display:none;"><button>Download Foto</button></a>
+</div>
 
-    <div class="controls">
-      <select id="cameraSelect"></select>
-      <button id="switchBtn">Ganti Kamera</button>
-    </div>
+<img id="preview" />
 
-    <div class="controlsRow">
-      <select id="category">
-        <option value="Barang Sampai">Barang Sampai</option>
-        <option value="Bahan Sebelum Dicuci">Bahan Sebelum Dicuci</option>
-        <option value="Sesudah Dicuci">Sesudah Dicuci</option>
-        <option value="Bahan Busuk/Rusak">Bahan Busuk / Rusak</option>
-      </select>
-      <input id="note" placeholder="Keterangan tambahan (mis. cabai merah 3kg)" />
-    </div>
+<canvas id="canvas"></canvas>
+<canvas id="mapCanvas" width="250" height="250"></canvas>
 
-    <div class="controlsRow">
-      <button id="takeBtn">Ambil Foto</button>
-      <button id="sampleBtn">Load Sample</button>
-      <button id="downloadBtn" style="display:none">Download</button>
-    </div>
+<script>
+let useFront = false;
+let video = document.getElementById("video");
+let canvas = document.getElementById("canvas");
+let preview = document.getElementById("preview");
+let downloadLink = document.getElementById("downloadLink");
+let mapCanvas = document.getElementById("mapCanvas");
+let mapCtx = mapCanvas.getContext("2d");
+let latitude, longitude;
 
-    <div id="previewArea"></div>
-    <div class="footer">Petunjuk: buka lewat <strong>http://localhost</strong> di HP (pakai Simple HTTP Server) atau deploy ke GitHub Pages. Untuk demo, saya sertakan tombol <em>Load Sample</em>.</div>
-  </div>
+async function startCamera(){
+ try{
+  let stream = await navigator.mediaDevices.getUserMedia({
+   video:{ facingMode: useFront?"user":"environment" },
+   audio:false
+  });
+  video.srcObject = stream;
+ }catch(e){ alert("Kamera gagal dibuka: "+e); }
+}
 
-  <script>
-    // Path sample image (dari upload Anda) — gunakan ini hanya untuk tombol demo "Load Sample"
-    const samplePath = '/mnt/data/1000249724.jpg';
+function switchCamera(){ useFront = !useFront; startCamera(); }
+startCamera();
 
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const cameraSelect = document.getElementById('cameraSelect');
-    const switchBtn = document.getElementById('switchBtn');
-    const takeBtn = document.getElementById('takeBtn');
-    const downloadBtn = document.getElementById('downloadBtn');
-    const previewArea = document.getElementById('previewArea');
-    const sampleBtn = document.getElementById('sampleBtn');
-    const categoryEl = document.getElementById('category');
-    const noteEl = document.getElementById('note');
+navigator.geolocation.getCurrentPosition(pos=>{
+ latitude = pos.coords.latitude;
+ longitude = pos.coords.longitude;
+ loadMap(latitude, longitude);
+});
 
-    let currentStream = null;
-    let currentDeviceId = null;
-    let devices = [];
-    let lastPosition = null;
-    let lastAddress = '';
-    let lastWeather = '';
+function loadMap(lat, lng){
+ let map = L.map(mapCanvas, {
+  center:[lat,lng], zoom:17, zoomControl:false, attributionControl:false
+ });
+ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+ L.marker([lat,lng]).addTo(map);
+ setTimeout(()=>{ map.invalidateSize(); },500);
+}
 
-    async function listCameras(){
-      const all = await navigator.mediaDevices.enumerateDevices();
-      devices = all.filter(d => d.kind === 'videoinput');
-      cameraSelect.innerHTML = '';
-      devices.forEach((d,i)=>{
-        const opt = document.createElement('option');
-        opt.value = d.deviceId;
-        opt.textContent = d.label || `Kamera ${i+1}`;
-        cameraSelect.appendChild(opt);
-      });
-      if(devices[0]){ currentDeviceId = devices[0].deviceId; }
-    }
+function takePhoto(){
+ let w = video.videoWidth;
+ let h = video.videoHeight;
+ canvas.width = w;
+ canvas.height = h;
+ let ctx = canvas.getContext("2d");
+ ctx.drawImage(video, 0, 0, w, h);
+ ctx.drawImage(mapCanvas, 20, 20, 250, 250);
+ let cat = document.getElementById("category").value;
+ ctx.fillStyle = "rgba(0,0,0,0.6)";
+ ctx.fillRect(w-400, 30, 360, 60);
+ ctx.fillStyle = "#fff";
+ ctx.font = "40px Arial";
+ ctx.fillText(cat, w-380, 75);
 
-    async function startCamera(deviceId){
-      if(currentStream){ currentStream.getTracks().forEach(t=>t.stop()); }
-      const constraints = { video: { deviceId: deviceId ? { exact: deviceId } : undefined, width: { ideal: 1280 } } };
-      try{
-        currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-        video.srcObject = currentStream;
-      }catch(err){
-        alert('Tidak bisa mengakses kamera: '+err.message);
-      }
-    }
+ let now = new Date();
+ let waktu = now.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+ ctx.font = "80px Arial";
+ ctx.fillText(waktu, 40, h-250);
 
-    cameraSelect.addEventListener('change', ()=>{
-      currentDeviceId = cameraSelect.value;
-      startCamera(currentDeviceId);
-    });
+ ctx.font = "32px Arial";
+ let tgl = now.toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric',weekday:'long'});
+ ctx.fillText(tgl, 40, h-200);
 
-    switchBtn.addEventListener('click', async ()=>{
-      // Ganti antara device list
-      if(devices.length<2) return alert('Hanya satu kamera terdeteksi');
-      const idx = devices.findIndex(d=>d.deviceId===currentDeviceId);
-      const next = devices[(idx+1)%devices.length];
-      currentDeviceId = next.deviceId;
-      cameraSelect.value = currentDeviceId;
-      await startCamera(currentDeviceId);
-    });
+ ctx.font = "26px Arial";
+ ctx.fillText(`Koordinat: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`, 40, h-140);
+ ctx.fillText(`Cuaca: 26°C`, 40, h-100);
 
-    takeBtn.addEventListener('click', async ()=>{
-      // ambil posisi dulu
-      await ensurePosition();
-      drawSnapshot();
-    });
-
-    sampleBtn.addEventListener('click', ()=>{
-      // load image dari path sample untuk demo overlay
-      loadSample(samplePath);
-    });
-
-    downloadBtn.addEventListener('click', ()=>{
-      const a = document.createElement('a');
-      a.href = previewArea.querySelector('img').src;
-      a.download = 'stok-opname.png';
-      a.click();
-    });
-
-    async function ensurePosition(){
-      if(!navigator.geolocation) return;
-      return new Promise((res,rej)=>{
-        navigator.geolocation.getCurrentPosition(async pos=>{
-          lastPosition = pos.coords;
-          // reverse geocode via Nominatim
-          try{
-            const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`);
-            const j = await r.json();
-            lastAddress = j.display_name || '';
-          }catch(e){ lastAddress = ''; }
-
-          // fetch simple weather via Open-Meteo (no key)
-          try{
-            const w = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${pos.coords.latitude}&longitude=${pos.coords.longitude}&current_weather=true&timezone=auto`);
-            const jw = await w.json();
-            if(jw && jw.current_weather){ lastWeather = jw.current_weather.temperature + '°C'; }
-          }catch(e){ lastWeather = ''; }
-
-          res();
-        },err=>{
-          console.warn('geolocation fail',err); res();
-        },{enableHighAccuracy:true, maximumAge:60000, timeout:8000});
-      });
-    }
-
-    function drawSnapshot(imgSrc){
-      const w = video.videoWidth || 1280;
-      const h = video.videoHeight || 720;
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      if(imgSrc){
-        const img = new Image(); img.crossOrigin='anonymous';
-        img.onload = ()=>{
-          ctx.drawImage(img,0,0,w,h);
-          drawOverlayOnContext(ctx,w,h);
-          finishPreview();
-        };
-        img.src = imgSrc;
-      }else{
-        ctx.drawImage(video,0,0,w,h);
-        drawOverlayOnContext(ctx,w,h);
-        finishPreview();
-      }
-    }
-
-    function drawOverlayOnContext(ctx,w,h){
-      // translucent bottom box
-      ctx.fillStyle = 'rgba(0,0,0,0.45)';
-      ctx.fillRect(12, h - 170, w - 24, 158);
-
-      // time big
-      const now = new Date();
-      const hh = String(now.getHours()).padStart(2,'0');
-      const mm = String(now.getMinutes()).padStart(2,'0');
-      ctx.fillStyle = 'white'; ctx.font = Math.floor(w*0.06)+'px sans-serif';
-      ctx.fillText(`${hh}:${mm}`, 30, h - 110);
-
-      // date & day
-      ctx.font = Math.floor(w*0.03)+'px sans-serif';
-      const dayName = now.toLocaleDateString('id-ID',{weekday:'long'});
-      const dateStr = now.toLocaleDateString('id-ID');
-      ctx.fillText(`${dateStr} | ${dayName}`, 30, h - 80);
-
-      // address
-      ctx.font = Math.floor(w*0.028)+'px sans-serif';
-      const addr = lastAddress || 'Lokasi: (Tidak tersedia)';
-      wrapText(ctx, addr, 30, h - 50, w - 60, Math.floor(w*0.028)+6);
-
-      // coords & weather
-      ctx.fillText(`Koordinat: ${lastPosition ? lastPosition.latitude.toFixed(6):'-'}, ${lastPosition ? lastPosition.longitude.toFixed(6):'-'}`, 30, h - 10);
-      if(lastWeather){ctx.fillText(`Cuaca: ${lastWeather}`, w - 260, h - 10);}
-
-      // category tag
-      ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(w - 240, h - 170 + 8, 220, 48);
-      ctx.fillStyle = 'white'; ctx.font = Math.floor(w*0.025)+'px sans-serif';
-      ctx.fillText(categoryEl.value, w - 220, h - 130);
-
-      // note small
-      if(noteEl.value){ ctx.font = Math.floor(w*0.02)+'px sans-serif'; ctx.fillText(`Ket: ${noteEl.value}`, w - 220, h - 100); }
-
-      // small map (render static OSM tile via simple mapbox static alternative not used — instead draw circle)
-      ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(12,12,120,120);
-      ctx.fillStyle='white'; ctx.font='11px sans-serif'; ctx.fillText('Peta (tidak muat)',22,28);
-    }
-
-    function wrapText(ctx, text, x, y, maxWidth, lineHeight){
-      const words = text.split(' ');
-      let line = '';
-      for(let n=0;n<words.length;n++){
-        const testLine = line + words[n] + ' ';
-        const metrics = ctx.measureText(testLine);
-        if(metrics.width > maxWidth && n>0){ ctx.fillText(line, x, y); line = words[n] + ' '; y += lineHeight; }
-        else { line = testLine; }
-      }
-      ctx.fillText(line, x, y);
-    }
-
-    function finishPreview(){
-      const data = canvas.toDataURL('image/png');
-      previewArea.innerHTML = `<img src="${data}" style="width:100%;border-radius:10px;margin-top:12px" />`;
-      downloadBtn.style.display = 'inline-block';
-    }
-
-    function loadSample(path){
-      ensurePosition().then(()=>{ drawSnapshot(path); });
-    }
-
-    // init
-    (async ()=>{
-      if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ alert('Browser Anda tidak mendukung getUserMedia. Buka lewat Chrome/Firefox terbaru.'); return; }
-      await listCameras();
-      await startCamera(currentDeviceId);
-      // try to get position early
-      try{ await ensurePosition(); }catch(e){}
-    })();
-  </script>
+ let dataURL = canvas.toDataURL("image/jpeg", 0.95);
+ preview.src = dataURL;
+ downloadLink.href = dataURL;
+ downloadLink.style.display = "block";
+}
+</script>
 </body>
 </html>
