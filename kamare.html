@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stok Opname Kamera</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f0f0f0; }
+    .container { max-width: 450px; margin: auto; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    video, canvas { width: 100%; border-radius: 12px; }
+    select, input, button { width: 100%; padding: 10px; margin-top: 10px; border-radius: 8px; border: 1px solid #ccc; }
+    button { background: #007bff; color: white; cursor: pointer; }
+    button:hover { background: #0056b3; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Stok Opname Kamera</h2>
+
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas" style="display:none;"></canvas>
+
+    <label>Kategori Foto:</label>
+    <select id="category">
+      <option>Barang Sampai</option>
+      <option>Bahan Sebelum Dicuci</option>
+      <option>Sesudah Dicuci</option>
+      <option>Bahan Busuk / Rusak</option>
+    </select>
+
+    <label>Keterangan Tambahan:</label>
+    <input id="note" placeholder="Contoh: cabai merah 3kg" />
+
+    <button onclick="takePhoto()">Ambil Foto</button>
+
+    <p id="photoPreview"></p>
+  </div>
+
+  <script>
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+
+    // Buka kamera
+    navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+      video.srcObject = stream;
+    });
+
+    function takePhoto() {
+      const ctx = canvas.getContext("2d");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0);
+
+      // Tambah teks metadata
+      const time = new Date().toLocaleString();
+      const category = document.getElementById("category").value;
+      const note = document.getElementById("note").value;
+
+      ctx.fillStyle = "rgba(0,0,0,0.6)";
+      ctx.fillRect(10, canvas.height - 100, canvas.width - 20, 90);
+
+      ctx.fillStyle = "white";
+      ctx.font = "22px Arial";
+      ctx.fillText(`Waktu: ${time}`, 20, canvas.height - 65);
+      ctx.fillText(`Kategori: ${category}`, 20, canvas.height - 40);
+      ctx.fillText(`Ket: ${note}`, 20, canvas.height - 15);
+
+      // Buat link download
+      const imgURL = canvas.toDataURL("image/png");
+      document.getElementById("photoPreview").innerHTML = `<img src="${imgURL}" style="width:100%;margin-top:15px;border-radius:12px;" />` + `<br><a href="${imgURL}" download="stok-opname.png">Download Foto</a>`;
+    }
+  </script>
+</body>
+</html>
